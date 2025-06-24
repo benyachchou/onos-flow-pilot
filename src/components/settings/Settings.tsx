@@ -4,8 +4,9 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { Settings as SettingsIcon, TestTube } from 'lucide-react';
+import { Settings as SettingsIcon, TestTube, CheckCircle, XCircle } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
+import { onosApi } from '@/services/onosApi';
 
 export const Settings = () => {
   const [controllerIp, setControllerIp] = useState('192.168.94.129');
@@ -13,47 +14,50 @@ export const Settings = () => {
   const [username, setUsername] = useState('onos');
   const [password, setPassword] = useState('rocks');
   const [testing, setTesting] = useState(false);
+  const [connectionStatus, setConnectionStatus] = useState<'unknown' | 'connected' | 'error'>('unknown');
   const { toast } = useToast();
 
   useEffect(() => {
     // Load saved settings
-    const savedIp = localStorage.getItem('onos_controller_ip');
-    const savedPort = localStorage.getItem('onos_controller_port');
-    const savedUsername = localStorage.getItem('onos_username');
-    const savedPassword = localStorage.getItem('onos_password');
-
-    if (savedIp) setControllerIp(savedIp);
-    if (savedPort) setControllerPort(savedPort);
-    if (savedUsername) setUsername(savedUsername);
-    if (savedPassword) setPassword(savedPassword);
+    const stored = localStorage.getItem('onosConfig');
+    if (stored) {
+      const config = JSON.parse(stored);
+      setControllerIp(config.ip || '192.168.94.129');
+      setControllerPort(config.port || '8181');
+      setUsername(config.username || 'onos');
+      setPassword(config.password || 'rocks');
+    }
   }, []);
 
   const testConnection = async () => {
     setTesting(true);
+    setConnectionStatus('unknown');
+    
     try {
-      const response = await fetch(`http://${controllerIp}:${controllerPort}/onos/v1/devices`, {
-        headers: {
-          'Authorization': `Basic ${btoa(`${username}:${password}`)}`,
-          'Accept': 'application/json'
-        }
-      });
-
-      if (response.ok) {
+      console.log('Testing connection to:', `http://${controllerIp}:${controllerPort}/onos/v1/devices`);
+      
+      const result = await onosApi.testConnection();
+      
+      if (result.success) {
+        setConnectionStatus('connected');
         toast({
           title: "Connexion réussie",
           description: "Le contrôleur ONOS répond correctement",
         });
       } else {
+        setConnectionStatus('error');
         toast({
           title: "Erreur de connexion",
-          description: `Code d'erreur: ${response.status}`,
+          description: result.error || "Impossible de se connecter au contrôleur",
           variant: "destructive",
         });
       }
     } catch (error) {
+      console.error('Connection test error:', error);
+      setConnectionStatus('error');
       toast({
         title: "Erreur de connexion",
-        description: "Impossible de se connecter au contrôleur",
+        description: "Vérifiez l'adresse IP et le port du contrôleur",
         variant: "destructive",
       });
     } finally {
@@ -62,20 +66,47 @@ export const Settings = () => {
   };
 
   const saveSettings = () => {
-    localStorage.setItem('onos_controller_ip', controllerIp);
-    localStorage.setItem('onos_controller_port', controllerPort);
-    localStorage.setItem('onos_username', username);
-    localStorage.setItem('onos_password', password);
+    const config = {
+      ip: controllerIp,
+      port: controllerPort,
+      username,
+      password,
+      baseUrl: `http://${controllerIp}:${controllerPort}/onos/v1`
+    };
 
-    // Dispatch event to update API configuration
-    window.dispatchEvent(new CustomEvent('configUpdated', {
-      detail: { ip: controllerIp, port: controllerPort, username, password }
-    }));
+    localStorage.setItem('onosConfig', JSON.stringify(config));
 
+    // Dispatch the correct event that the API service is listening for
+    window.dispatchEvent(new CustomEvent('onosConfigChanged'));
+
+    setConnectionStatus('unknown');
+    
     toast({
       title: "Paramètres sauvegardés",
       description: "La configuration a été mise à jour",
     });
+  };
+
+  const getStatusIcon = () => {
+    switch (connectionStatus) {
+      case 'connected':
+        return <CheckCircle className="h-4 w-4 text-green-500" />;
+      case 'error':
+        return <XCircle className="h-4 w-4 text-red-500" />;
+      default:
+        return null;
+    }
+  };
+
+  const getStatusText = () => {
+    switch (connectionStatus) {
+      case 'connected':
+        return 'Connecté';
+      case 'error':
+        return 'Erreur de connexion';
+      default:
+        return 'Non testé';
+    }
   };
 
   return (
@@ -143,6 +174,13 @@ export const Settings = () => {
                 Sauvegarder
               </Button>
             </div>
+
+            {connectionStatus !== 'unknown' && (
+              <div className="flex items-center gap-2 mt-4 p-3 rounded-lg bg-gray-50">
+                {getStatusIcon()}
+                <span className="text-sm">{getStatusText()}</span>
+              </div>
+            )}
           </CardContent>
         </Card>
 
@@ -154,7 +192,12 @@ export const Settings = () => {
             <div className="space-y-2">
               <p><strong>Version:</strong> 1.0.0</p>
               <p><strong>API ONOS:</strong> v1</p>
-              <p><strong>Statut:</strong> Connecté</p>
+              <p><strong>URL actuelle:</strong> http://{controllerIp}:{controllerPort}/onos/v1</p>
+              <div className="flex items-center gap-2">
+                <strong>Statut:</strong> 
+                {getStatusIcon()}
+                <span>{getStatusText()}</span>
+              </div>
             </div>
           </CardContent>
         </Card>
