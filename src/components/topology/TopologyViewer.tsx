@@ -1,4 +1,3 @@
-
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { useQuery } from '@tanstack/react-query';
@@ -152,6 +151,7 @@ export const TopologyViewer = () => {
       edges: {
         shadow: true,
         smooth: {
+          enabled: true,
           type: 'continuous',
           roundness: 0.2
         }
