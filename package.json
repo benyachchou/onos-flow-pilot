@@ -60,6 +60,7 @@
     "tailwind-merge": "^2.5.2",
     "tailwindcss-animate": "^1.0.7",
     "vaul": "^0.9.3",
+    "vis-data": "^7.1.9",
     "vis-network": "^9.1.12",
     "zod": "^3.23.8"
   },
