@@ -132,16 +132,42 @@ class OnosApiService {
 
   async executeRequest(method: string, endpoint: string, data?: any) {
     try {
+      console.log('Executing request:', { method, endpoint, data });
+      
+      // Préparer les données pour la requête
+      let requestData = undefined;
+      if (data && ['POST', 'PUT', 'PATCH'].includes(method.toUpperCase())) {
+        // Si c'est une string, essayer de la parser
+        if (typeof data === 'string') {
+          try {
+            requestData = JSON.parse(data);
+          } catch (e) {
+            console.error('Invalid JSON data:', data);
+            throw new Error('Corps JSON invalide');
+          }
+        } else {
+          requestData = data;
+        }
+        console.log('Request data prepared:', requestData);
+      }
+
       const response = await this.api.request({
         method: method.toLowerCase(),
         url: endpoint,
-        data
+        data: requestData
       });
-      return { success: true, data: response.data, status: response.status };
+
+      console.log('Request successful:', response);
+      return { 
+        success: true, 
+        data: response.data, 
+        status: response.status 
+      };
     } catch (error: any) {
+      console.error('Request failed:', error);
       return { 
         success: false, 
-        error: error.message || 'Request failed',
+        error: error.response?.data?.message || error.message || 'Request failed',
         status: error.response?.status 
       };
     }
