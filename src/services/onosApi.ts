@@ -6,32 +6,40 @@ class OnosApiService {
   private baseUrl: string;
 
   constructor() {
-    // Utiliser le proxy local au lieu de l'IP directe du contrôleur
+    // Toujours utiliser le proxy local - jamais d'appel direct
     this.baseUrl = '/onos/v1';
     this.api = this.createApiInstance();
     
-    // Écouter les changements de configuration pour les tests de connexion uniquement
+    // Écouter les changements de configuration pour mettre à jour les credentials
     window.addEventListener('onosConfigChanged', this.handleConfigChange.bind(this));
   }
 
   private getStoredConfig() {
     const stored = localStorage.getItem('onosConfig');
     if (stored) {
-      return JSON.parse(stored);
+      const config = JSON.parse(stored);
+      return {
+        ip: config.ip || '192.168.94.129',
+        port: config.port || '8181',
+        username: config.username || 'onos',
+        password: config.password || 'rocks',
+        // Toujours utiliser le proxy local pour les appels API
+        baseUrl: '/onos/v1'
+      };
     }
     return {
       ip: '192.168.94.129',
       port: '8181',
       username: 'onos',
       password: 'rocks',
-      baseUrl: 'http://192.168.94.129:8181/onos/v1'
+      baseUrl: '/onos/v1'
     };
   }
 
   private createApiInstance(): AxiosInstance {
     const config = this.getStoredConfig();
     return axios.create({
-      baseURL: this.baseUrl, // Utiliser le proxy local
+      baseURL: this.baseUrl, // Toujours le proxy local
       timeout: 10000,
       headers: {
         'Accept': 'application/json',
@@ -50,7 +58,7 @@ class OnosApiService {
     this.api = this.createApiInstance();
   }
 
-  // Méthodes API - utilisent maintenant le proxy
+  // Méthodes API - utilisent toujours le proxy
   async getDevices() {
     try {
       console.log('Fetching devices via proxy:', this.baseUrl + '/devices');
@@ -107,28 +115,14 @@ class OnosApiService {
     }
   }
 
-  // Test de connexion - utilise l'IP directe pour vérifier la connectivité
+  // Test de connexion - teste aussi via le proxy maintenant
   async testConnection() {
     try {
-      const config = this.getStoredConfig();
-      const directApi = axios.create({
-        baseURL: config.baseUrl,
-        timeout: 10000,
-        headers: {
-          'Accept': 'application/json',
-          'Content-Type': 'application/json',
-        },
-        auth: {
-          username: config.username,
-          password: config.password
-        }
-      });
-      
-      console.log('Testing direct connection to:', config.baseUrl + '/devices');
-      const response = await directApi.get('/devices');
+      console.log('Testing connection via proxy:', this.baseUrl + '/devices');
+      const response = await this.api.get('/devices');
       return { success: true, data: response.data };
     } catch (error: any) {
-      console.error('Direct connection test failed:', error);
+      console.error('Connection test via proxy failed:', error);
       return { 
         success: false, 
         error: error.message || 'Connection failed' 

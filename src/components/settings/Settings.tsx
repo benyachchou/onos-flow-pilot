@@ -71,7 +71,8 @@ export const Settings = () => {
       port: controllerPort,
       username,
       password,
-      baseUrl: `http://${controllerIp}:${controllerPort}/onos/v1`
+      // Ne pas sauvegarder l'URL directe, utiliser toujours le proxy
+      baseUrl: '/onos/v1'
     };
 
     localStorage.setItem('onosConfig', JSON.stringify(config));

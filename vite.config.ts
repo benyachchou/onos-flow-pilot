@@ -9,6 +9,14 @@ export default defineConfig(({ mode }) => ({
   server: {
     host: "::",
     port: 8080,
+    proxy: {
+      '/onos/v1': {
+        target: 'http://192.168.94.129:8181',
+        changeOrigin: true,
+        secure: false,
+        rewrite: (path) => path.replace(/^\/onos\/v1/, '/onos/v1'),
+      },
+    },
   },
   plugins: [
     react(),
