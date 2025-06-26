@@ -6,13 +6,17 @@ import { componentTagger } from "lovable-tagger";
 
 // https://vitejs.dev/config/
 export default defineConfig(({ mode }) => {
+  // Use environment variable or default IP
+  const controllerIp = process.env.VITE_ONOS_IP || '192.168.94.129';
+  const controllerPort = process.env.VITE_ONOS_PORT || '8181';
+  
   return {
     server: {
       host: "::",
       port: 8080,
       proxy: {
         '/onos/v1': {
-          target: 'http://192.168.94.129:8181',
+          target: `http://${controllerIp}:${controllerPort}`,
           changeOrigin: true,
           secure: false,
           rewrite: (path) => path.replace(/^\/onos\/v1/, '/onos/v1'),

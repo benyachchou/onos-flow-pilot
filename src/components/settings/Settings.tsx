@@ -1,9 +1,10 @@
+
 import React, { useState, useEffect } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { Settings as SettingsIcon, TestTube, CheckCircle, XCircle, RefreshCw } from 'lucide-react';
+import { Settings as SettingsIcon, TestTube, CheckCircle, XCircle, RefreshCw, AlertTriangle } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { onosApi } from '@/services/onosApi';
 
@@ -97,8 +98,8 @@ export const Settings = () => {
     
     toast({
       title: "Paramètres sauvegardés",
-      description: "La configuration a été mise à jour. Rechargez la page pour appliquer les changements de proxy.",
-      duration: 5000,
+      description: "IMPORTANT: Pour changer l'adresse IP, vous devez redémarrer le serveur de développement avec la nouvelle IP.",
+      duration: 8000,
     });
   };
 
@@ -133,6 +134,26 @@ export const Settings = () => {
       <div className="flex items-center mb-6">
         <SettingsIcon className="mr-3 h-8 w-8" />
         <h1 className="text-3xl font-bold text-gray-900">Paramètres</h1>
+      </div>
+
+      {/* Important notice about proxy configuration */}
+      <div className="mb-6 p-4 bg-orange-50 border border-orange-200 rounded-lg">
+        <div className="flex items-start gap-3">
+          <AlertTriangle className="h-5 w-5 text-orange-600 mt-0.5" />
+          <div>
+            <h3 className="text-orange-800 font-medium mb-2">Configuration du Proxy Vite</h3>
+            <p className="text-orange-700 text-sm mb-2">
+              Pour changer l'adresse IP du contrôleur ONOS (actuellement {controllerIp}:{controllerPort}), 
+              vous devez redémarrer le serveur avec les variables d'environnement:
+            </p>
+            <div className="bg-orange-100 p-2 rounded text-sm font-mono">
+              VITE_ONOS_IP={controllerIp} VITE_ONOS_PORT={controllerPort} npm run dev
+            </div>
+            <p className="text-orange-700 text-xs mt-2">
+              Ou modifiez directement l'adresse dans vite.config.ts et redémarrez le serveur.
+            </p>
+          </div>
+        </div>
       </div>
 
       {configChanged && (
