@@ -1,10 +1,9 @@
-
 import React, { useState, useEffect } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { Settings as SettingsIcon, TestTube, CheckCircle, XCircle } from 'lucide-react';
+import { Settings as SettingsIcon, TestTube, CheckCircle, XCircle, RefreshCw } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { onosApi } from '@/services/onosApi';
 
@@ -15,6 +14,7 @@ export const Settings = () => {
   const [password, setPassword] = useState('rocks');
   const [testing, setTesting] = useState(false);
   const [connectionStatus, setConnectionStatus] = useState<'unknown' | 'connected' | 'error'>('unknown');
+  const [configChanged, setConfigChanged] = useState(false);
   const { toast } = useToast();
 
   useEffect(() => {
@@ -28,6 +28,19 @@ export const Settings = () => {
       setPassword(config.password || 'rocks');
     }
   }, []);
+
+  // Track if IP/Port has changed
+  useEffect(() => {
+    const stored = localStorage.getItem('onosConfig');
+    if (stored) {
+      const config = JSON.parse(stored);
+      const hasChanged = (
+        controllerIp !== (config.ip || '192.168.94.129') ||
+        controllerPort !== (config.port || '8181')
+      );
+      setConfigChanged(hasChanged);
+    }
+  }, [controllerIp, controllerPort]);
 
   const testConnection = async () => {
     setTesting(true);
@@ -71,7 +84,6 @@ export const Settings = () => {
       port: controllerPort,
       username,
       password,
-      // Ne pas sauvegarder l'URL directe, utiliser toujours le proxy
       baseUrl: '/onos/v1'
     };
 
@@ -81,11 +93,17 @@ export const Settings = () => {
     window.dispatchEvent(new CustomEvent('onosConfigChanged'));
 
     setConnectionStatus('unknown');
+    setConfigChanged(false);
     
     toast({
       title: "Paramètres sauvegardés",
-      description: "La configuration a été mise à jour",
+      description: "La configuration a été mise à jour. Rechargez la page pour appliquer les changements de proxy.",
+      duration: 5000,
     });
+  };
+
+  const reloadPage = () => {
+    window.location.reload();
   };
 
   const getStatusIcon = () => {
@@ -116,6 +134,23 @@ export const Settings = () => {
         <SettingsIcon className="mr-3 h-8 w-8" />
         <h1 className="text-3xl font-bold text-gray-900">Paramètres</h1>
       </div>
+
+      {configChanged && (
+        <div className="mb-6 p-4 bg-yellow-50 border border-yellow-200 rounded-lg">
+          <div className="flex items-center justify-between">
+            <div>
+              <h3 className="text-yellow-800 font-medium">Configuration modifiée</h3>
+              <p className="text-yellow-700 text-sm">
+                L'adresse IP ou le port a été modifié. Rechargez la page pour appliquer les changements.
+              </p>
+            </div>
+            <Button onClick={reloadPage} variant="outline" size="sm">
+              <RefreshCw className="mr-2 h-4 w-4" />
+              Recharger
+            </Button>
+          </div>
+        </div>
+      )}
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         <Card>
