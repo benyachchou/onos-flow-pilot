@@ -136,25 +136,36 @@ class OnosApiService {
       
       // Préparer les données pour la requête
       let requestData = undefined;
+      
       if (data && ['POST', 'PUT', 'PATCH'].includes(method.toUpperCase())) {
-        // Si c'est une string, essayer de la parser
+        // Si c'est une string JSON, essayer de la parser
         if (typeof data === 'string') {
           try {
-            requestData = JSON.parse(data);
+            // Vérifier si la string n'est pas vide
+            if (data.trim()) {
+              requestData = JSON.parse(data);
+              console.log('Parsed JSON data:', requestData);
+            }
           } catch (e) {
-            console.error('Invalid JSON data:', data);
-            throw new Error('Corps JSON invalide');
+            console.error('Invalid JSON data:', data, e);
+            throw new Error('Format JSON invalide: ' + e.message);
           }
-        } else {
+        } else if (typeof data === 'object' && data !== null) {
           requestData = data;
+          console.log('Object data:', requestData);
         }
-        console.log('Request data prepared:', requestData);
       }
+
+      console.log('Final request data:', requestData);
 
       const response = await this.api.request({
         method: method.toLowerCase(),
         url: endpoint,
-        data: requestData
+        data: requestData,
+        headers: {
+          'Content-Type': 'application/json',
+          'Accept': 'application/json'
+        }
       });
 
       console.log('Request successful:', response);
@@ -165,10 +176,24 @@ class OnosApiService {
       };
     } catch (error: any) {
       console.error('Request failed:', error);
+      
+      // Améliorer le message d'erreur
+      let errorMessage = 'Request failed';
+      if (error.response) {
+        errorMessage = error.response?.data?.message || 
+                      error.response?.data?.error || 
+                      error.response?.statusText || 
+                      `HTTP ${error.response.status}`;
+      } else if (error.request) {
+        errorMessage = 'Aucune réponse du serveur';
+      } else {
+        errorMessage = error.message;
+      }
+      
       return { 
         success: false, 
-        error: error.response?.data?.message || error.message || 'Request failed',
-        status: error.response?.status 
+        error: errorMessage,
+        status: error.response?.status || 500
       };
     }
   }

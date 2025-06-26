@@ -46,24 +46,38 @@ export const RequestBuilder: React.FC<RequestBuilderProps> = ({
     try {
       const requestUrl = urlMode === 'custom' ? customUrl : url;
       
-      let requestBody;
-      if (body) {
-        try {
-          requestBody = JSON.parse(body);
-        } catch (e) {
-          throw new Error('Corps JSON invalide');
+      if (!requestUrl.trim()) {
+        throw new Error('URL de la requête requise');
+      }
+
+      console.log('Preparing request:', { method, requestUrl, body });
+
+      // Préparer les données du corps pour les requêtes POST, PUT, PATCH
+      let requestBody = undefined;
+      if (['POST', 'PUT', 'PATCH'].includes(method.toUpperCase()) && body) {
+        if (body.trim()) {
+          try {
+            // Valider le JSON avant de l'envoyer
+            JSON.parse(body);
+            requestBody = body; // Garder comme string pour que le service le parse
+          } catch (e) {
+            throw new Error('Format JSON invalide dans le corps de la requête');
+          }
         }
       }
+
+      console.log('Sending request with body:', requestBody);
 
       const result = await onosApi.executeRequest(method, requestUrl, requestBody);
       
       const responseTime = Date.now() - startTime;
-      const responseSize = JSON.stringify(result.data).length;
+      const responseData = result.data || result.error;
+      const responseSize = JSON.stringify(responseData).length;
 
       setResponse({
         status: result.status || (result.success ? 200 : 500),
         statusText: result.success ? 'OK' : 'Error',
-        data: result.data || result.error,
+        data: responseData,
         headers: {
           'Content-Type': 'application/json',
           'Content-Length': responseSize.toString()
@@ -80,17 +94,19 @@ export const RequestBuilder: React.FC<RequestBuilderProps> = ({
       } else {
         toast({
           title: "Erreur de requête",
-          description: result.error,
+          description: result.error || 'Erreur inconnue',
           variant: "destructive",
         });
       }
     } catch (error: any) {
+      const responseTime = Date.now() - startTime;
+      
       setResponse({
-        status: 500,
-        statusText: 'Error',
+        status: 400,
+        statusText: 'Bad Request',
         data: { error: error.message },
         headers: {},
-        responseTime: Date.now() - startTime,
+        responseTime,
         size: 0
       });
       
@@ -232,6 +248,14 @@ export const RequestBuilder: React.FC<RequestBuilderProps> = ({
               rows={12}
               className="font-mono"
             />
+            {body && (
+              <div className="mt-2 text-sm text-gray-600">
+                <strong>Aperçu JSON:</strong>
+                <pre className="bg-gray-100 p-2 rounded text-xs mt-1 overflow-auto max-h-32">
+                  {body}
+                </pre>
+              </div>
+            )}
           </div>
         )}
 
