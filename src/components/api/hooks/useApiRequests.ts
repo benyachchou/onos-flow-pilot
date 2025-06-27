@@ -1,5 +1,6 @@
 
 import { useState, useEffect } from 'react';
+import { useSQLite } from '@/hooks/useSQLite';
 
 export interface ApiRequest {
   id: string;
@@ -34,14 +35,25 @@ export const useApiRequests = () => {
   const [savedRequests, setSavedRequests] = useState<ApiRequest[]>([]);
   const [urlMode, setUrlMode] = useState<'preset' | 'custom'>('preset');
 
-  useEffect(() => {
-    const saved = localStorage.getItem('onosApiRequests');
-    if (saved) {
-      setSavedRequests(JSON.parse(saved));
-    }
-  }, []);
+  const { 
+    isInitialized, 
+    saveApiRequest, 
+    getAllApiRequests, 
+    deleteApiRequest: deleteSQLiteRequest 
+  } = useSQLite();
 
-  const saveRequest = (toast: any) => {
+  useEffect(() => {
+    const loadSavedRequests = async () => {
+      if (isInitialized) {
+        const requests = await getAllApiRequests();
+        setSavedRequests(requests);
+      }
+    };
+
+    loadSavedRequests();
+  }, [isInitialized, getAllApiRequests]);
+
+  const saveRequest = async (toast: any) => {
     const requestUrl = urlMode === 'custom' ? customUrl : url;
     const newRequest: ApiRequest = {
       id: Date.now().toString(),
@@ -53,9 +65,11 @@ export const useApiRequests = () => {
       timestamp: Date.now()
     };
 
-    const updated = [...savedRequests, newRequest];
-    setSavedRequests(updated);
-    localStorage.setItem('onosApiRequests', JSON.stringify(updated));
+    await saveApiRequest(newRequest);
+    
+    // Recharger les requêtes sauvegardées
+    const requests = await getAllApiRequests();
+    setSavedRequests(requests);
     
     toast({
       title: "Requête sauvegardée",
@@ -76,10 +90,12 @@ export const useApiRequests = () => {
     setBody(request.body);
   };
 
-  const deleteRequest = (id: string, toast: any) => {
-    const updated = savedRequests.filter(r => r.id !== id);
-    setSavedRequests(updated);
-    localStorage.setItem('onosApiRequests', JSON.stringify(updated));
+  const deleteRequest = async (id: string, toast: any) => {
+    await deleteSQLiteRequest(id);
+    
+    // Recharger les requêtes sauvegardées
+    const requests = await getAllApiRequests();
+    setSavedRequests(requests);
     
     toast({
       title: "Requête supprimée",
@@ -98,6 +114,7 @@ export const useApiRequests = () => {
     urlMode, setUrlMode,
     saveRequest,
     loadRequest,
-    deleteRequest
+    deleteRequest,
+    isInitialized
   };
 };

@@ -3,9 +3,10 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { Settings as SettingsIcon, TestTube, CheckCircle, XCircle, RefreshCw, AlertTriangle, Zap } from 'lucide-react';
+import { Settings as SettingsIcon, TestTube, CheckCircle, XCircle, RefreshCw, AlertTriangle, Zap, Database } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { onosApi } from '@/services/onosApi';
+import { useSQLite } from '@/hooks/useSQLite';
 
 export const Settings = () => {
   const [controllerIp, setControllerIp] = useState('192.168.94.129');
@@ -18,17 +19,38 @@ export const Settings = () => {
   const [isRestarting, setIsRestarting] = useState(false);
   const { toast } = useToast();
 
+  const { 
+    isInitialized, 
+    error: dbError, 
+    saveOnosConfig, 
+    getLatestOnosConfig 
+  } = useSQLite();
+
   useEffect(() => {
-    // Load saved settings
-    const stored = localStorage.getItem('onosConfig');
-    if (stored) {
-      const config = JSON.parse(stored);
-      setControllerIp(config.ip || '192.168.94.129');
-      setControllerPort(config.port || '8181');
-      setUsername(config.username || 'onos');
-      setPassword(config.password || 'rocks');
-    }
-  }, []);
+    const loadConfig = async () => {
+      if (isInitialized) {
+        const config = await getLatestOnosConfig();
+        if (config) {
+          setControllerIp(config.ip);
+          setControllerPort(config.port);
+          setUsername(config.username);
+          setPassword(config.password);
+        }
+      } else {
+        // Fallback vers localStorage si SQLite n'est pas encore initialisé
+        const stored = localStorage.getItem('onosConfig');
+        if (stored) {
+          const config = JSON.parse(stored);
+          setControllerIp(config.ip || '192.168.94.129');
+          setControllerPort(config.port || '8181');
+          setUsername(config.username || 'onos');
+          setPassword(config.password || 'rocks');
+        }
+      }
+    };
+
+    loadConfig();
+  }, [isInitialized, getLatestOnosConfig]);
 
   // Track if IP/Port has changed
   useEffect(() => {
@@ -79,7 +101,7 @@ export const Settings = () => {
     }
   };
 
-  const saveSettings = () => {
+  const saveSettings = async () => {
     const config = {
       ip: controllerIp,
       port: controllerPort,
@@ -88,6 +110,12 @@ export const Settings = () => {
       baseUrl: '/onos/v1'
     };
 
+    // Sauvegarder dans SQLite
+    if (isInitialized) {
+      await saveOnosConfig(config);
+    }
+
+    // Sauvegarder aussi dans localStorage pour la compatibilité
     localStorage.setItem('onosConfig', JSON.stringify(config));
     window.dispatchEvent(new CustomEvent('onosConfigChanged'));
 
@@ -96,7 +124,7 @@ export const Settings = () => {
     
     toast({
       title: "Paramètres sauvegardés",
-      description: "Configuration mise à jour. Cliquez sur 'Redémarrer automatiquement' pour appliquer les changements.",
+      description: "Configuration sauvegardée dans SQLite et localStorage",
       duration: 5000,
     });
   };
@@ -186,6 +214,20 @@ npm run dev
       <div className="flex items-center mb-6">
         <SettingsIcon className="mr-3 h-8 w-8" />
         <h1 className="text-3xl font-bold text-gray-900">Paramètres</h1>
+      </div>
+
+      {/* Database Status */}
+      <div className="mb-6 p-4 bg-green-50 border border-green-200 rounded-lg">
+        <div className="flex items-center gap-3">
+          <Database className="h-5 w-5 text-green-600" />
+          <div>
+            <h3 className="text-green-800 font-medium">Base de données SQLite</h3>
+            <p className="text-green-700 text-sm">
+              {isInitialized ? 'Base de données initialisée avec succès' : 'Initialisation en cours...'}
+              {dbError && ` - Erreur: ${dbError}`}
+            </p>
+          </div>
+        </div>
       </div>
 
       {/* Enhanced notice with auto-restart option */}
@@ -302,7 +344,8 @@ npm run dev
                 <TestTube className="mr-2 h-4 w-4" />
                 {testing ? 'Test en cours...' : 'Tester la connexion'}
               </Button>
-              <Button onClick={saveSettings}>
+              <Button onClick={saveSettings} disabled={!isInitialized}>
+                <Database className="mr-2 h-4 w-4" />
                 Sauvegarder
               </Button>
             </div>
@@ -324,11 +367,21 @@ npm run dev
             <div className="space-y-2">
               <p><strong>Version:</strong> 1.0.0</p>
               <p><strong>API ONOS:</strong> v1</p>
+              <p><strong>Base de données:</strong> SQLite (WebAssembly)</p>
               <p><strong>URL actuelle:</strong> http://{controllerIp}:{controllerPort}/onos/v1</p>
               <div className="flex items-center gap-2">
                 <strong>Statut:</strong> 
                 {getStatusIcon()}
                 <span>{getStatusText()}</span>
+              </div>
+              <div className="flex items-center gap-2">
+                <strong>DB Status:</strong>
+                {isInitialized ? (
+                  <CheckCircle className="h-4 w-4 text-green-500" />
+                ) : (
+                  <XCircle className="h-4 w-4 text-red-500" />
+                )}
+                <span>{isInitialized ? 'Connectée' : 'Initialisation...'}</span>
               </div>
             </div>
           </CardContent>
