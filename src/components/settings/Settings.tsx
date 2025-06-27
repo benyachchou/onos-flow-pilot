@@ -1,10 +1,9 @@
-
 import React, { useState, useEffect } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { Settings as SettingsIcon, TestTube, CheckCircle, XCircle, RefreshCw, AlertTriangle } from 'lucide-react';
+import { Settings as SettingsIcon, TestTube, CheckCircle, XCircle, RefreshCw, AlertTriangle, Zap } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { onosApi } from '@/services/onosApi';
 
@@ -16,6 +15,7 @@ export const Settings = () => {
   const [testing, setTesting] = useState(false);
   const [connectionStatus, setConnectionStatus] = useState<'unknown' | 'connected' | 'error'>('unknown');
   const [configChanged, setConfigChanged] = useState(false);
+  const [isRestarting, setIsRestarting] = useState(false);
   const { toast } = useToast();
 
   useEffect(() => {
@@ -89,8 +89,6 @@ export const Settings = () => {
     };
 
     localStorage.setItem('onosConfig', JSON.stringify(config));
-
-    // Dispatch the correct event that the API service is listening for
     window.dispatchEvent(new CustomEvent('onosConfigChanged'));
 
     setConnectionStatus('unknown');
@@ -98,9 +96,63 @@ export const Settings = () => {
     
     toast({
       title: "Paramètres sauvegardés",
-      description: "IMPORTANT: Pour changer l'adresse IP, vous devez redémarrer le serveur de développement avec la nouvelle IP.",
-      duration: 8000,
+      description: "Configuration mise à jour. Cliquez sur 'Redémarrer automatiquement' pour appliquer les changements.",
+      duration: 5000,
     });
+  };
+
+  const handleAutoRestart = async () => {
+    setIsRestarting(true);
+    
+    try {
+      // Créer un script de redémarrage automatique
+      const restartScript = `#!/bin/bash
+# Script de redémarrage automatique généré
+export VITE_ONOS_IP=${controllerIp}
+export VITE_ONOS_PORT=${controllerPort}
+npm run dev
+`;
+
+      // Créer un blob avec le script
+      const blob = new Blob([restartScript], { type: 'text/plain' });
+      const url = window.URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = 'restart-dev-server.sh';
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      window.URL.revokeObjectURL(url);
+
+      toast({
+        title: "Script téléchargé",
+        description: "Exécutez le script 'restart-dev-server.sh' dans votre terminal pour redémarrer avec la nouvelle IP.",
+        duration: 8000,
+      });
+
+      // Essayer de recharger la page après quelques secondes
+      setTimeout(() => {
+        toast({
+          title: "Rechargement automatique",
+          description: "La page va se recharger pour tenter d'appliquer les nouveaux paramètres...",
+          duration: 3000,
+        });
+        
+        setTimeout(() => {
+          window.location.reload();
+        }, 3000);
+      }, 2000);
+
+    } catch (error) {
+      console.error('Erreur lors de la génération du script:', error);
+      toast({
+        title: "Erreur",
+        description: "Impossible de générer le script automatique. Redémarrez manuellement le serveur.",
+        variant: "destructive",
+      });
+    } finally {
+      setIsRestarting(false);
+    }
   };
 
   const reloadPage = () => {
@@ -136,22 +188,45 @@ export const Settings = () => {
         <h1 className="text-3xl font-bold text-gray-900">Paramètres</h1>
       </div>
 
-      {/* Important notice about proxy configuration */}
+      {/* Enhanced notice with auto-restart option */}
+      <div className="mb-6 p-4 bg-blue-50 border border-blue-200 rounded-lg">
+        <div className="flex items-start gap-3">
+          <Zap className="h-5 w-5 text-blue-600 mt-0.5" />
+          <div className="flex-1">
+            <h3 className="text-blue-800 font-medium mb-2">Redémarrage Automatique</h3>
+            <p className="text-blue-700 text-sm mb-3">
+              Pour changer l'adresse IP du contrôleur ONOS, le serveur de développement doit être redémarré.
+            </p>
+            <div className="flex gap-2">
+              <Button 
+                onClick={handleAutoRestart} 
+                disabled={isRestarting}
+                size="sm"
+                className="bg-blue-600 hover:bg-blue-700"
+              >
+                <Zap className="mr-2 h-4 w-4" />
+                {isRestarting ? 'Génération...' : 'Redémarrer automatiquement'}
+              </Button>
+              <div className="text-blue-600 text-xs self-center">
+                Télécharge un script et recharge la page
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {/* Original manual instruction notice */}
       <div className="mb-6 p-4 bg-orange-50 border border-orange-200 rounded-lg">
         <div className="flex items-start gap-3">
           <AlertTriangle className="h-5 w-5 text-orange-600 mt-0.5" />
           <div>
-            <h3 className="text-orange-800 font-medium mb-2">Configuration du Proxy Vite</h3>
+            <h3 className="text-orange-800 font-medium mb-2">Méthode Manuelle</h3>
             <p className="text-orange-700 text-sm mb-2">
-              Pour changer l'adresse IP du contrôleur ONOS (actuellement {controllerIp}:{controllerPort}), 
-              vous devez redémarrer le serveur avec les variables d'environnement:
+              Ou redémarrez manuellement avec les variables d'environnement:
             </p>
             <div className="bg-orange-100 p-2 rounded text-sm font-mono">
               VITE_ONOS_IP={controllerIp} VITE_ONOS_PORT={controllerPort} npm run dev
             </div>
-            <p className="text-orange-700 text-xs mt-2">
-              Ou modifiez directement l'adresse dans vite.config.ts et redémarrez le serveur.
-            </p>
           </div>
         </div>
       </div>
@@ -162,7 +237,7 @@ export const Settings = () => {
             <div>
               <h3 className="text-yellow-800 font-medium">Configuration modifiée</h3>
               <p className="text-yellow-700 text-sm">
-                L'adresse IP ou le port a été modifié. Rechargez la page pour appliquer les changements.
+                L'adresse IP ou le port a été modifié. Utilisez le redémarrage automatique pour appliquer les changements.
               </p>
             </div>
             <Button onClick={reloadPage} variant="outline" size="sm">
