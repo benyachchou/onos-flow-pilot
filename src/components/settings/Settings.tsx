@@ -1,5 +1,5 @@
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -25,59 +25,79 @@ export const Settings = () => {
     getLatestOnosConfig 
   } = useSQLite();
 
+  // Charger la configuration au montage du composant
   useEffect(() => {
     const loadConfig = async () => {
       if (isInitialized) {
-        const config = await getLatestOnosConfig();
-        if (config) {
-          setControllerIp(config.ip);
-          setControllerPort(config.port);
-          setUsername(config.username);
-          setPassword(config.password);
+        try {
+          const config = await getLatestOnosConfig();
+          if (config) {
+            setControllerIp(config.ip);
+            setControllerPort(config.port);
+            setUsername(config.username);
+            setPassword(config.password);
+          }
+        } catch (error) {
+          console.error('Error loading config from SQLite:', error);
         }
       } else {
         // Fallback vers localStorage si SQLite n'est pas encore initialisé
         const stored = localStorage.getItem('onosConfig');
         if (stored) {
-          const config = JSON.parse(stored);
-          setControllerIp(config.ip || '192.168.94.129');
-          setControllerPort(config.port || '8181');
-          setUsername(config.username || 'onos');
-          setPassword(config.password || 'rocks');
+          try {
+            const config = JSON.parse(stored);
+            setControllerIp(config.ip || '192.168.94.129');
+            setControllerPort(config.port || '8181');
+            setUsername(config.username || 'onos');
+            setPassword(config.password || 'rocks');
+          } catch (error) {
+            console.error('Error parsing localStorage config:', error);
+          }
         }
       }
     };
 
     loadConfig();
-  }, [isInitialized, getLatestOnosConfig]);
+  }, [isInitialized]); // Seulement dépendant de isInitialized
 
-  // Auto-save when IP or port changes
+  // Fonction de sauvegarde avec useCallback pour éviter les re-renders
+  const saveConfig = useCallback(async (config: { ip: string; port: string; username: string; password: string }) => {
+    try {
+      // Sauvegarder dans SQLite si disponible
+      if (isInitialized && saveOnosConfig) {
+        await saveOnosConfig(config);
+      }
+
+      // Sauvegarder aussi dans localStorage pour la compatibilité
+      const configToSave = {
+        ...config,
+        baseUrl: '/onos/v1'
+      };
+      localStorage.setItem('onosConfig', JSON.stringify(configToSave));
+      window.dispatchEvent(new CustomEvent('onosConfigChanged'));
+
+      setConnectionStatus('unknown');
+    } catch (error) {
+      console.error('Error saving config:', error);
+    }
+  }, [isInitialized, saveOnosConfig]);
+
+  // Auto-save avec debounce
   useEffect(() => {
-    const autoSave = async () => {
-      if (isInitialized && (controllerIp || controllerPort)) {
+    const timeoutId = setTimeout(() => {
+      if (controllerIp && controllerPort) {
         const config = {
           ip: controllerIp,
           port: controllerPort,
           username,
-          password,
-          baseUrl: '/onos/v1'
+          password
         };
-
-        // Sauvegarder dans SQLite
-        await saveOnosConfig(config);
-
-        // Sauvegarder aussi dans localStorage pour la compatibilité
-        localStorage.setItem('onosConfig', JSON.stringify(config));
-        window.dispatchEvent(new CustomEvent('onosConfigChanged'));
-
-        setConnectionStatus('unknown');
+        saveConfig(config);
       }
-    };
+    }, 1000);
 
-    // Délai pour éviter trop de sauvegardes lors de la saisie
-    const timeoutId = setTimeout(autoSave, 1000);
     return () => clearTimeout(timeoutId);
-  }, [controllerIp, controllerPort, username, password, isInitialized, saveOnosConfig]);
+  }, [controllerIp, controllerPort, username, password, saveConfig]);
 
   const testConnection = async () => {
     setTesting(true);
@@ -120,20 +140,10 @@ export const Settings = () => {
       ip: controllerIp,
       port: controllerPort,
       username,
-      password,
-      baseUrl: '/onos/v1'
+      password
     };
 
-    // Sauvegarder dans SQLite
-    if (isInitialized) {
-      await saveOnosConfig(config);
-    }
-
-    // Sauvegarder aussi dans localStorage pour la compatibilité
-    localStorage.setItem('onosConfig', JSON.stringify(config));
-    window.dispatchEvent(new CustomEvent('onosConfigChanged'));
-
-    setConnectionStatus('unknown');
+    await saveConfig(config);
     
     toast({
       title: "Paramètres sauvegardés",
