@@ -1,7 +1,8 @@
 
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import { Button } from '@/components/ui/button';
 import { Copy } from 'lucide-react';
+import { useSQLite } from '@/hooks/useSQLite';
 
 interface RequestActionsProps {
   method: string;
@@ -20,9 +21,55 @@ export const RequestActions: React.FC<RequestActionsProps> = ({
   body,
   toast
 }) => {
+  const [onosConfig, setOnosConfig] = useState({
+    ip: '192.168.94.129',
+    port: '8181',
+    username: 'onos',
+    password: 'rocks'
+  });
+
+  const { isInitialized, getLatestOnosConfig } = useSQLite();
+
+  useEffect(() => {
+    const loadConfig = async () => {
+      if (isInitialized) {
+        const config = await getLatestOnosConfig();
+        if (config) {
+          setOnosConfig({
+            ip: config.ip,
+            port: config.port,
+            username: config.username,
+            password: config.password
+          });
+        }
+      } else {
+        // Fallback vers localStorage
+        const stored = localStorage.getItem('onosConfig');
+        if (stored) {
+          const config = JSON.parse(stored);
+          setOnosConfig({
+            ip: config.ip || '192.168.94.129',
+            port: config.port || '8181',
+            username: config.username || 'onos',
+            password: config.password || 'rocks'
+          });
+        }
+      }
+    };
+
+    loadConfig();
+
+    // Écouter les changements de configuration
+    const handleConfigChange = () => {
+      loadConfig();
+    };
+
+    window.addEventListener('onosConfigChanged', handleConfigChange);
+    return () => window.removeEventListener('onosConfigChanged', handleConfigChange);
+  }, [isInitialized, getLatestOnosConfig]);
+
   const copyAsCurl = () => {
-    const config = JSON.parse(localStorage.getItem('onosConfig') || '{}');
-    const baseUrl = config.baseUrl || 'http://192.168.94.129:8181/onos/v1';
+    const baseUrl = `http://${onosConfig.ip}:${onosConfig.port}/onos/v1`;
     const fullUrl = urlMode === 'custom' ? customUrl : url;
     const completeUrl = fullUrl.startsWith('http') ? fullUrl : `${baseUrl}${fullUrl}`;
     
@@ -37,8 +84,8 @@ export const RequestActions: React.FC<RequestActionsProps> = ({
       curl += `\n  -H "${key}: ${value}" \\`;
     });
     
-    if (config.username && config.password) {
-      curl += `\n  -u "${config.username}:${config.password}" \\`;
+    if (onosConfig.username && onosConfig.password) {
+      curl += `\n  -u "${onosConfig.username}:${onosConfig.password}" \\`;
     }
     
     if (body && ['POST', 'PUT', 'PATCH'].includes(method)) {
@@ -50,6 +97,7 @@ export const RequestActions: React.FC<RequestActionsProps> = ({
     navigator.clipboard.writeText(curl);
     toast({
       title: "Commande cURL copiée",
+      description: `Avec IP: ${onosConfig.ip}:${onosConfig.port}`,
     });
   };
 
