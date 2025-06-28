@@ -25,7 +25,7 @@ export const Settings = () => {
     getLatestOnosConfig 
   } = useSQLite();
 
-  // Charger la configuration au montage du composant
+  // Charger la configuration une seule fois au montage
   useEffect(() => {
     const loadConfig = async () => {
       if (isInitialized) {
@@ -41,7 +41,6 @@ export const Settings = () => {
           console.error('Error loading config from SQLite:', error);
         }
       } else {
-        // Fallback vers localStorage si SQLite n'est pas encore initialisé
         const stored = localStorage.getItem('onosConfig');
         if (stored) {
           try {
@@ -58,46 +57,33 @@ export const Settings = () => {
     };
 
     loadConfig();
-  }, [isInitialized]); // Seulement dépendant de isInitialized
+  }, []); // Pas de dépendances pour éviter les boucles
 
-  // Fonction de sauvegarde avec useCallback pour éviter les re-renders
-  const saveConfig = useCallback(async (config: { ip: string; port: string; username: string; password: string }) => {
+  // Fonction de sauvegarde simplifiée
+  const handleSaveConfig = useCallback(async () => {
+    const config = {
+      ip: controllerIp,
+      port: controllerPort,
+      username,
+      password
+    };
+
     try {
-      // Sauvegarder dans SQLite si disponible
       if (isInitialized && saveOnosConfig) {
         await saveOnosConfig(config);
       }
 
-      // Sauvegarder aussi dans localStorage pour la compatibilité
       const configToSave = {
         ...config,
         baseUrl: '/onos/v1'
       };
       localStorage.setItem('onosConfig', JSON.stringify(configToSave));
       window.dispatchEvent(new CustomEvent('onosConfigChanged'));
-
       setConnectionStatus('unknown');
     } catch (error) {
       console.error('Error saving config:', error);
     }
-  }, [isInitialized, saveOnosConfig]);
-
-  // Auto-save avec debounce
-  useEffect(() => {
-    const timeoutId = setTimeout(() => {
-      if (controllerIp && controllerPort) {
-        const config = {
-          ip: controllerIp,
-          port: controllerPort,
-          username,
-          password
-        };
-        saveConfig(config);
-      }
-    }, 1000);
-
-    return () => clearTimeout(timeoutId);
-  }, [controllerIp, controllerPort, username, password, saveConfig]);
+  }, [controllerIp, controllerPort, username, password, isInitialized, saveOnosConfig]);
 
   const testConnection = async () => {
     setTesting(true);
@@ -136,14 +122,7 @@ export const Settings = () => {
   };
 
   const manualSave = async () => {
-    const config = {
-      ip: controllerIp,
-      port: controllerPort,
-      username,
-      password
-    };
-
-    await saveConfig(config);
+    await handleSaveConfig();
     
     toast({
       title: "Paramètres sauvegardés",
@@ -188,7 +167,7 @@ export const Settings = () => {
           <div>
             <h3 className="text-green-800 font-medium">Base de données SQLite</h3>
             <p className="text-green-700 text-sm">
-              {isInitialized ? 'Base de données initialisée avec succès - Sauvegarde automatique activée' : 'Initialisation en cours...'}
+              {isInitialized ? 'Base de données initialisée avec succès' : 'Initialisation en cours...'}
               {dbError && ` - Erreur: ${dbError}`}
             </p>
           </div>
@@ -208,6 +187,7 @@ export const Settings = () => {
                   id="ip"
                   value={controllerIp}
                   onChange={(e) => setControllerIp(e.target.value)}
+                  onBlur={handleSaveConfig}
                   placeholder="192.168.1.100"
                 />
               </div>
@@ -217,6 +197,7 @@ export const Settings = () => {
                   id="port"
                   value={controllerPort}
                   onChange={(e) => setControllerPort(e.target.value)}
+                  onBlur={handleSaveConfig}
                   placeholder="8181"
                 />
               </div>
@@ -229,6 +210,7 @@ export const Settings = () => {
                   id="username"
                   value={username}
                   onChange={(e) => setUsername(e.target.value)}
+                  onBlur={handleSaveConfig}
                   placeholder="onos"
                 />
               </div>
@@ -239,6 +221,7 @@ export const Settings = () => {
                   type="password"
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
+                  onBlur={handleSaveConfig}
                   placeholder="rocks"
                 />
               </div>
@@ -289,7 +272,7 @@ export const Settings = () => {
                 <span>{isInitialized ? 'Connectée' : 'Initialisation...'}</span>
               </div>
               <div className="text-sm text-green-600 mt-2">
-                ✓ Sauvegarde automatique des modifications
+                ✓ Sauvegarde lors de la sortie des champs
               </div>
             </div>
           </CardContent>
