@@ -20,24 +20,82 @@ export default defineConfig(({ mode }) => {
           target: `http://${controllerIp}:${controllerPort}`,
           changeOrigin: true,
           secure: false,
+          timeout: 30000, // Increase timeout to 30 seconds
           rewrite: (path) => path.replace(/^\/onos\/v1/, '/onos/v1'),
           configure: (proxy, options) => {
             proxy.on('error', (err, req, res) => {
-              console.log('Proxy error:', err);
+              console.error('Proxy error:', err.message);
+              console.error('Error code:', err.code);
+              console.error('Target:', options.target);
+              
+              // Handle specific error types
+              if (err.code === 'ECONNRESET') {
+                console.error('Connection was reset by the ONOS controller');
+                console.error('This usually means:');
+                console.error('1. ONOS controller is not running');
+                console.error('2. Wrong IP address or port');
+                console.error('3. Network connectivity issues');
+                console.error('4. Authentication rejected by ONOS');
+              } else if (err.code === 'ECONNREFUSED') {
+                console.error('Connection refused - ONOS controller may not be running');
+              } else if (err.code === 'ETIMEDOUT') {
+                console.error('Connection timed out - check network connectivity');
+              }
+              
+              // Send a proper error response
+              if (!res.headersSent) {
+                res.writeHead(503, {
+                  'Content-Type': 'application/json',
+                  'Access-Control-Allow-Origin': '*',
+                  'Access-Control-Allow-Methods': 'GET,HEAD,OPTIONS,POST,PUT,PATCH,DELETE',
+                  'Access-Control-Allow-Headers': 'Content-Type, Authorization'
+                });
+                res.end(JSON.stringify({
+                  error: 'ONOS Controller Connection Failed',
+                  message: err.code === 'ECONNRESET' ? 
+                    'Connection reset by ONOS controller. Check if ONOS is running and credentials are correct.' :
+                    err.code === 'ECONNREFUSED' ?
+                    'Connection refused. ONOS controller may not be running.' :
+                    err.code === 'ETIMEDOUT' ?
+                    'Connection timed out. Check network connectivity.' :
+                    `Network error: ${err.message}`,
+                  code: err.code,
+                  target: options.target
+                }));
+              }
             });
+            
             proxy.on('proxyReq', (proxyReq, req, res) => {
               console.log('Proxying request:', req.method, req.url, 'to', options.target + proxyReq.path);
-              // Ensure proper headers for ONOS
+              
+              // Set proper headers for ONOS
               proxyReq.setHeader('Accept', 'application/json');
               proxyReq.setHeader('Content-Type', 'application/json');
-              // Remove the hardcoded Origin header - let the browser send the actual origin
-              // proxyReq.setHeader('Origin', 'https://stackblitz.com');
+              
+              // Add connection keep-alive to prevent socket hang ups
+              proxyReq.setHeader('Connection', 'keep-alive');
+              proxyReq.setHeader('Keep-Alive', 'timeout=30, max=100');
+              
+              // Set a reasonable timeout
+              proxyReq.setTimeout(25000, () => {
+                console.error('Proxy request timeout for:', req.url);
+                proxyReq.destroy();
+              });
             });
+            
             proxy.on('proxyRes', (proxyRes, req, res) => {
               console.log('Proxy response:', proxyRes.statusCode, req.url);
+              
               if (proxyRes.statusCode === 401 || proxyRes.statusCode === 403) {
-                console.log('Authentication failed - check ONOS credentials');
+                console.error('Authentication failed - check ONOS credentials (should be onos/rocks)');
+              } else if (proxyRes.statusCode >= 500) {
+                console.error('ONOS server error:', proxyRes.statusCode, proxyRes.statusMessage);
               }
+              
+              // Add CORS headers to all responses
+              res.setHeader('Access-Control-Allow-Origin', '*');
+              res.setHeader('Access-Control-Allow-Methods', 'GET,HEAD,OPTIONS,POST,PUT,PATCH,DELETE');
+              res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization');
             });
           }
         },

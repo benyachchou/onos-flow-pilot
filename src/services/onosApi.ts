@@ -67,14 +67,20 @@ class OnosApiService {
     
     const instance = axios.create({
       baseURL: this.baseUrl, // Toujours le proxy local
-      timeout: 15000, // Increased timeout
+      timeout: 25000, // 25 second timeout to match proxy timeout
       headers: {
         'Accept': 'application/json',
         'Content-Type': 'application/json',
+        'Connection': 'keep-alive',
       },
       auth: {
         username: config.username.trim(), // Trim whitespace
         password: config.password.trim()  // Trim whitespace
+      },
+      // Add retry configuration
+      validateStatus: function (status) {
+        // Consider 2xx and 3xx as success, handle 4xx and 5xx in interceptors
+        return status < 400;
       }
     });
 
@@ -87,16 +93,36 @@ class OnosApiService {
       };
       console.log('Request interceptor - using credentials:', {
         username: config.auth.username,
-        hasPassword: !!config.auth.password
+        hasPassword: !!config.auth.password,
+        url: config.url
       });
       return config;
     });
 
-    // Add response interceptor to handle auth errors
+    // Add response interceptor to handle auth errors and network issues
     instance.interceptors.response.use(
       (response) => response,
       (error) => {
-        if (error.response?.status === 401 || error.response?.status === 403) {
+        console.error('API request failed:', {
+          url: error.config?.url,
+          method: error.config?.method,
+          status: error.response?.status,
+          statusText: error.response?.statusText,
+          code: error.code,
+          message: error.message
+        });
+
+        // Handle different types of errors
+        if (error.code === 'ECONNRESET') {
+          console.error('Connection reset by ONOS controller');
+          error.message = 'Connection reset by ONOS controller. Check if ONOS is running and accessible.';
+        } else if (error.code === 'ECONNREFUSED') {
+          console.error('Connection refused by ONOS controller');
+          error.message = 'Connection refused. ONOS controller may not be running.';
+        } else if (error.code === 'ETIMEDOUT' || error.code === 'ECONNABORTED') {
+          console.error('Request timeout');
+          error.message = 'Request timed out. Check network connectivity to ONOS controller.';
+        } else if (error.response?.status === 401 || error.response?.status === 403) {
           console.error('Authentication failed - credentials may be incorrect');
           console.error('Response details:', {
             status: error.response.status,
@@ -112,7 +138,11 @@ class OnosApiService {
               message: error.response.status === 401 ? 'Unauthorized - invalid credentials' : 'Authentication failed - check credentials in Settings'
             }
           }));
+        } else if (error.response?.status >= 500) {
+          console.error('ONOS server error:', error.response.status, error.response.statusText);
+          error.message = `ONOS server error: ${error.response.status} ${error.response.statusText}`;
         }
+        
         return Promise.reject(error);
       }
     );
@@ -142,10 +172,19 @@ class OnosApiService {
         url: error.config?.url,
         method: error.config?.method
       });
-      // Don't throw the error, just log it and return empty result
       return true; // Indicates auth error was handled
     }
     return false; // Not an auth error
+  }
+
+  // Helper method to handle network errors consistently
+  private handleNetworkError(error: any, operation: string) {
+    if (error.code === 'ECONNRESET' || error.code === 'ECONNREFUSED' || 
+        error.code === 'ETIMEDOUT' || error.code === 'ECONNABORTED') {
+      console.error(`Network error in ${operation}:`, error.code, error.message);
+      return true; // Indicates network error was handled
+    }
+    return false; // Not a network error
   }
 
   // Méthodes API - utilisent toujours le proxy avec meilleure gestion d'erreur
@@ -159,8 +198,12 @@ class OnosApiService {
       if (this.handleAuthError(error, 'getDevices')) {
         return { devices: [] };
       }
-      // For non-auth errors, still throw to maintain error handling
-      console.error('Non-auth error in getDevices:', error);
+      // Handle network errors gracefully
+      if (this.handleNetworkError(error, 'getDevices')) {
+        return { devices: [] };
+      }
+      // For other errors, still throw to maintain error handling
+      console.error('Unexpected error in getDevices:', error);
       throw error;
     }
   }
@@ -175,8 +218,12 @@ class OnosApiService {
       if (this.handleAuthError(error, 'getLinks')) {
         return { links: [] };
       }
-      // For non-auth errors, still throw to maintain error handling
-      console.error('Non-auth error in getLinks:', error);
+      // Handle network errors gracefully
+      if (this.handleNetworkError(error, 'getLinks')) {
+        return { links: [] };
+      }
+      // For other errors, still throw to maintain error handling
+      console.error('Unexpected error in getLinks:', error);
       throw error;
     }
   }
@@ -191,8 +238,12 @@ class OnosApiService {
       if (this.handleAuthError(error, 'getHosts')) {
         return { hosts: [] };
       }
-      // For non-auth errors, still throw to maintain error handling
-      console.error('Non-auth error in getHosts:', error);
+      // Handle network errors gracefully
+      if (this.handleNetworkError(error, 'getHosts')) {
+        return { hosts: [] };
+      }
+      // For other errors, still throw to maintain error handling
+      console.error('Unexpected error in getHosts:', error);
       throw error;
     }
   }
@@ -208,8 +259,12 @@ class OnosApiService {
       if (this.handleAuthError(error, 'getFlows')) {
         return { flows: [] };
       }
-      // For non-auth errors, still throw to maintain error handling
-      console.error('Non-auth error in getFlows:', error);
+      // Handle network errors gracefully
+      if (this.handleNetworkError(error, 'getFlows')) {
+        return { flows: [] };
+      }
+      // For other errors, still throw to maintain error handling
+      console.error('Unexpected error in getFlows:', error);
       throw error;
     }
   }
@@ -224,8 +279,12 @@ class OnosApiService {
       if (this.handleAuthError(error, 'getTopology')) {
         return { topology: {} };
       }
-      // For non-auth errors, still throw to maintain error handling
-      console.error('Non-auth error in getTopology:', error);
+      // Handle network errors gracefully
+      if (this.handleNetworkError(error, 'getTopology')) {
+        return { topology: {} };
+      }
+      // For other errors, still throw to maintain error handling
+      console.error('Unexpected error in getTopology:', error);
       throw error;
     }
   }
@@ -248,14 +307,20 @@ class OnosApiService {
       console.error('Connection test via proxy failed:', error);
       let errorMessage = 'Connection failed';
       
-      if (error.response?.status === 403) {
-        errorMessage = 'Authentication failed - check username and password';
+      if (error.code === 'ECONNRESET') {
+        errorMessage = 'Connection reset by ONOS controller. Check if ONOS is running and accessible.';
+      } else if (error.code === 'ECONNREFUSED') {
+        errorMessage = 'Connection refused. ONOS controller may not be running.';
+      } else if (error.code === 'ETIMEDOUT' || error.code === 'ECONNABORTED') {
+        errorMessage = 'Connection timed out. Check network connectivity to ONOS controller.';
+      } else if (error.response?.status === 403) {
+        errorMessage = 'Authentication failed - check username and password (should be onos/rocks)';
       } else if (error.response?.status === 401) {
-        errorMessage = 'Unauthorized - invalid credentials';
+        errorMessage = 'Unauthorized - invalid credentials (should be onos/rocks)';
       } else if (error.response) {
         errorMessage = `HTTP ${error.response.status}: ${error.response.statusText}`;
       } else if (error.request) {
-        errorMessage = 'No response from server - check network connection';
+        errorMessage = 'No response from server - check network connection and ONOS controller status';
       } else {
         errorMessage = error.message;
       }
@@ -316,11 +381,17 @@ class OnosApiService {
       
       // Améliorer le message d'erreur
       let errorMessage = 'Request failed';
-      if (error.response) {
+      if (error.code === 'ECONNRESET') {
+        errorMessage = 'Connection reset by ONOS controller. Check if ONOS is running and accessible.';
+      } else if (error.code === 'ECONNREFUSED') {
+        errorMessage = 'Connection refused. ONOS controller may not be running.';
+      } else if (error.code === 'ETIMEDOUT' || error.code === 'ECONNABORTED') {
+        errorMessage = 'Request timed out. Check network connectivity to ONOS controller.';
+      } else if (error.response) {
         if (error.response.status === 403) {
-          errorMessage = 'Authentication failed - check credentials in Settings';
+          errorMessage = 'Authentication failed - check credentials in Settings (should be onos/rocks)';
         } else if (error.response.status === 401) {
-          errorMessage = 'Unauthorized - invalid credentials';
+          errorMessage = 'Unauthorized - invalid credentials (should be onos/rocks)';
         } else {
           errorMessage = error.response?.data?.message || 
                         error.response?.data?.error || 
@@ -328,7 +399,7 @@ class OnosApiService {
                         `HTTP ${error.response.status}`;
         }
       } else if (error.request) {
-        errorMessage = 'Aucune réponse du serveur';
+        errorMessage = 'Aucune réponse du serveur - vérifiez la connectivité réseau';
       } else {
         errorMessage = error.message;
       }
