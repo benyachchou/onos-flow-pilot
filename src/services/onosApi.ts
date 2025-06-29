@@ -67,14 +67,14 @@ class OnosApiService {
     
     const instance = axios.create({
       baseURL: this.baseUrl, // Toujours le proxy local
-      timeout: 10000,
+      timeout: 15000, // Increased timeout
       headers: {
         'Accept': 'application/json',
         'Content-Type': 'application/json',
       },
       auth: {
-        username: config.username,
-        password: config.password
+        username: config.username.trim(), // Trim whitespace
+        password: config.password.trim()  // Trim whitespace
       }
     });
 
@@ -82,9 +82,13 @@ class OnosApiService {
     instance.interceptors.request.use((config) => {
       const currentConfig = this.getStoredConfig();
       config.auth = {
-        username: currentConfig.username,
-        password: currentConfig.password
+        username: currentConfig.username.trim(),
+        password: currentConfig.password.trim()
       };
+      console.log('Request interceptor - using credentials:', {
+        username: config.auth.username,
+        hasPassword: !!config.auth.password
+      });
       return config;
     });
 
@@ -94,6 +98,11 @@ class OnosApiService {
       (error) => {
         if (error.response?.status === 401 || error.response?.status === 403) {
           console.error('Authentication failed - credentials may be incorrect');
+          console.error('Response details:', {
+            status: error.response.status,
+            statusText: error.response.statusText,
+            headers: error.response.headers
+          });
           // Notify components about authentication error
           this.notifyAuthError();
           // Dispatch a global event for authentication errors
@@ -127,6 +136,12 @@ class OnosApiService {
   private handleAuthError(error: any, operation: string) {
     if (error.response?.status === 401 || error.response?.status === 403) {
       console.error(`Authentication error in ${operation} - credentials invalid`);
+      console.error('Error details:', {
+        status: error.response.status,
+        statusText: error.response.statusText,
+        url: error.config?.url,
+        method: error.config?.method
+      });
       // Don't throw the error, just log it and return empty result
       return true; // Indicates auth error was handled
     }
@@ -145,6 +160,7 @@ class OnosApiService {
         return { devices: [] };
       }
       // For non-auth errors, still throw to maintain error handling
+      console.error('Non-auth error in getDevices:', error);
       throw error;
     }
   }
@@ -160,6 +176,7 @@ class OnosApiService {
         return { links: [] };
       }
       // For non-auth errors, still throw to maintain error handling
+      console.error('Non-auth error in getLinks:', error);
       throw error;
     }
   }
@@ -175,6 +192,7 @@ class OnosApiService {
         return { hosts: [] };
       }
       // For non-auth errors, still throw to maintain error handling
+      console.error('Non-auth error in getHosts:', error);
       throw error;
     }
   }
@@ -207,6 +225,7 @@ class OnosApiService {
         return { topology: {} };
       }
       // For non-auth errors, still throw to maintain error handling
+      console.error('Non-auth error in getTopology:', error);
       throw error;
     }
   }
@@ -215,7 +234,15 @@ class OnosApiService {
   async testConnection() {
     try {
       console.log('Testing connection via proxy:', this.baseUrl + '/devices');
+      const config = this.getStoredConfig();
+      console.log('Testing with credentials:', {
+        username: config.username,
+        hasPassword: !!config.password,
+        passwordLength: config.password.length
+      });
+      
       const response = await this.api.get('/devices');
+      console.log('Connection test successful:', response.status);
       return { success: true, data: response.data };
     } catch (error: any) {
       console.error('Connection test via proxy failed:', error);
