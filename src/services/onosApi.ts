@@ -143,6 +143,16 @@ class OnosApiService {
     throw error;
   }
 
+  // Helper method to handle authentication errors consistently
+  private handleAuthError(error: any, operation: string) {
+    if (error.response?.status === 401 || error.response?.status === 403) {
+      console.error(`Authentication error in ${operation} - credentials invalid`);
+      // Don't throw the error, just log it and return empty result
+      return true; // Indicates auth error was handled
+    }
+    return false; // Not an auth error
+  }
+
   // Méthodes API - utilisent toujours le proxy avec meilleure gestion d'erreur
   async getDevices() {
     try {
@@ -151,9 +161,8 @@ class OnosApiService {
       return response.data;
     } catch (error: any) {
       // Handle auth errors gracefully - return empty result and let interceptor handle notifications
-      if (error.response?.status === 401 || error.response?.status === 403) {
-        console.error('Authentication error in getDevices - credentials invalid');
-        return { devices: [] }; // Return empty result instead of throwing
+      if (this.handleAuthError(error, 'getDevices')) {
+        return { devices: [] };
       }
       // For non-auth errors, still throw to maintain error handling
       throw error;
@@ -167,9 +176,8 @@ class OnosApiService {
       return response.data;
     } catch (error: any) {
       // Handle auth errors gracefully - return empty result and let interceptor handle notifications
-      if (error.response?.status === 401 || error.response?.status === 403) {
-        console.error('Authentication error in getLinks - credentials invalid');
-        return { links: [] }; // Return empty result instead of throwing
+      if (this.handleAuthError(error, 'getLinks')) {
+        return { links: [] };
       }
       // For non-auth errors, still throw to maintain error handling
       throw error;
@@ -183,9 +191,8 @@ class OnosApiService {
       return response.data;
     } catch (error: any) {
       // Handle auth errors gracefully - return empty result and let interceptor handle notifications
-      if (error.response?.status === 401 || error.response?.status === 403) {
-        console.error('Authentication error in getHosts - credentials invalid');
-        return { hosts: [] }; // Return empty result instead of throwing
+      if (this.handleAuthError(error, 'getHosts')) {
+        return { hosts: [] };
       }
       // For non-auth errors, still throw to maintain error handling
       throw error;
@@ -200,9 +207,8 @@ class OnosApiService {
       return response.data;
     } catch (error: any) {
       // Handle auth errors gracefully - return empty result and let interceptor handle notifications
-      if (error.response?.status === 401 || error.response?.status === 403) {
-        console.error('Authentication error in getFlows - credentials invalid');
-        return { flows: [] }; // Return empty result instead of throwing
+      if (this.handleAuthError(error, 'getFlows')) {
+        return { flows: [] };
       }
       // For non-auth errors, still throw to maintain error handling
       console.error('Non-auth error in getFlows:', error);
@@ -217,9 +223,8 @@ class OnosApiService {
       return response.data;
     } catch (error: any) {
       // Handle auth errors gracefully - return empty result and let interceptor handle notifications
-      if (error.response?.status === 401 || error.response?.status === 403) {
-        console.error('Authentication error in getTopology - credentials invalid');
-        return { topology: {} }; // Return empty result instead of throwing
+      if (this.handleAuthError(error, 'getTopology')) {
+        return { topology: {} };
       }
       // For non-auth errors, still throw to maintain error handling
       throw error;
