@@ -27,9 +27,9 @@ export const useSettingsLogic = () => {
       
       toast({
         title: "Erreur d'authentification",
-        description: "Les identifiants ONOS sont incorrects. Veuillez vérifier vos paramètres de connexion.",
+        description: "Les identifiants ONOS sont incorrects. Veuillez vérifier vos paramètres de connexion dans les Paramètres.",
         variant: "destructive",
-        duration: 5000,
+        duration: 8000, // Longer duration for important auth errors
       });
     };
 
@@ -51,6 +51,12 @@ export const useSettingsLogic = () => {
             setControllerPort(config.port);
             setUsername(config.username);
             setPassword(config.password);
+            console.log('Loaded config from SQLite:', { 
+              ip: config.ip, 
+              port: config.port, 
+              username: config.username,
+              hasPassword: !!config.password 
+            });
           }
         } catch (error) {
           console.error('Error loading config from SQLite:', error);
@@ -64,6 +70,12 @@ export const useSettingsLogic = () => {
             setControllerPort(config.port || '8181');
             setUsername(config.username || 'onos');
             setPassword(config.password || 'rocks');
+            console.log('Loaded config from localStorage:', { 
+              ip: config.ip, 
+              port: config.port, 
+              username: config.username,
+              hasPassword: !!config.password 
+            });
           } catch (error) {
             console.error('Error parsing localStorage config:', error);
           }
@@ -74,7 +86,7 @@ export const useSettingsLogic = () => {
     loadConfig();
   }, [isInitialized, getLatestOnosConfig]);
 
-  // Simplified save function
+  // Simplified save function with better error handling
   const handleSaveConfig = useCallback(async () => {
     const config = {
       ip: controllerIp,
@@ -86,6 +98,7 @@ export const useSettingsLogic = () => {
     try {
       if (isInitialized && saveOnosConfig) {
         await saveOnosConfig(config);
+        console.log('Config saved to SQLite successfully');
       }
 
       const configToSave = {
@@ -98,13 +111,24 @@ export const useSettingsLogic = () => {
       window.dispatchEvent(new CustomEvent('onosConfigChanged'));
       onosApi.updateCredentials();
       
+      // Reset connection status when config changes
       setConnectionStatus('unknown');
       
-      console.log('Configuration saved successfully:', configToSave);
+      console.log('Configuration saved successfully:', {
+        ip: configToSave.ip,
+        port: configToSave.port,
+        username: configToSave.username,
+        hasPassword: !!configToSave.password
+      });
     } catch (error) {
       console.error('Error saving config:', error);
+      toast({
+        title: "Erreur de sauvegarde",
+        description: "Impossible de sauvegarder la configuration",
+        variant: "destructive",
+      });
     }
-  }, [controllerIp, controllerPort, username, password, isInitialized, saveOnosConfig]);
+  }, [controllerIp, controllerPort, username, password, isInitialized, saveOnosConfig, toast]);
 
   const testConnection = async () => {
     setTesting(true);
@@ -123,32 +147,42 @@ export const useSettingsLogic = () => {
         setConnectionStatus('connected');
         toast({
           title: "Connexion réussie",
-          description: "Le contrôleur ONOS répond correctement",
+          description: "Le contrôleur ONOS répond correctement avec les identifiants fournis",
+          duration: 5000,
         });
       } else {
         setConnectionStatus('error');
         
         // Provide more specific error messages for authentication issues
         let errorMessage = result.error || "Impossible de se connecter au contrôleur";
+        let toastTitle = "Erreur de connexion";
+        
         if (result.error?.includes('Authentication failed') || result.error?.includes('403')) {
           errorMessage = "Erreur d'authentification - vérifiez le nom d'utilisateur et le mot de passe";
+          toastTitle = "Erreur d'authentification";
         } else if (result.error?.includes('Unauthorized') || result.error?.includes('401')) {
           errorMessage = "Accès non autorisé - identifiants invalides";
+          toastTitle = "Accès refusé";
+        } else if (result.error?.includes('No response from server')) {
+          errorMessage = "Aucune réponse du serveur - vérifiez l'adresse IP et le port";
+          toastTitle = "Serveur inaccessible";
         }
         
         toast({
-          title: "Erreur de connexion",
+          title: toastTitle,
           description: errorMessage,
           variant: "destructive",
+          duration: 8000,
         });
       }
     } catch (error) {
       console.error('Connection test error:', error);
       setConnectionStatus('error');
       toast({
-        title: "Erreur de connexion",
-        description: "Vérifiez l'adresse IP, le port et les identifiants du contrôleur",
+        title: "Erreur de test de connexion",
+        description: "Une erreur inattendue s'est produite lors du test de connexion",
         variant: "destructive",
+        duration: 5000,
       });
     } finally {
       setTesting(false);
@@ -156,13 +190,22 @@ export const useSettingsLogic = () => {
   };
 
   const manualSave = async () => {
-    await handleSaveConfig();
-    
-    toast({
-      title: "Paramètres sauvegardés",
-      description: "Configuration sauvegardée avec succès",
-      duration: 3000,
-    });
+    try {
+      await handleSaveConfig();
+      
+      toast({
+        title: "Paramètres sauvegardés",
+        description: "Configuration sauvegardée avec succès. Les nouveaux identifiants seront utilisés pour les prochaines requêtes.",
+        duration: 4000,
+      });
+    } catch (error) {
+      console.error('Manual save error:', error);
+      toast({
+        title: "Erreur de sauvegarde",
+        description: "Impossible de sauvegarder la configuration",
+        variant: "destructive",
+      });
+    }
   };
 
   return {

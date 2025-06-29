@@ -143,13 +143,18 @@ class OnosApiService {
     throw error;
   }
 
-  // Méthodes API - utilisent toujours le proxy
+  // Méthodes API - utilisent toujours le proxy avec meilleure gestion d'erreur
   async getDevices() {
     try {
       console.log('Fetching devices via proxy:', this.baseUrl + '/devices');
       const response = await this.api.get('/devices');
       return response.data;
     } catch (error: any) {
+      // Don't re-throw auth errors to prevent double error handling
+      if (error.response?.status === 401 || error.response?.status === 403) {
+        console.error('Authentication error in getDevices - credentials invalid');
+        return { devices: [] }; // Return empty result instead of throwing
+      }
       this.handleApiError(error, 'fetching devices');
     }
   }
@@ -160,6 +165,11 @@ class OnosApiService {
       const response = await this.api.get('/links');
       return response.data;
     } catch (error: any) {
+      // Don't re-throw auth errors to prevent double error handling
+      if (error.response?.status === 401 || error.response?.status === 403) {
+        console.error('Authentication error in getLinks - credentials invalid');
+        return { links: [] }; // Return empty result instead of throwing
+      }
       this.handleApiError(error, 'fetching links');
     }
   }
@@ -170,6 +180,11 @@ class OnosApiService {
       const response = await this.api.get('/hosts');
       return response.data;
     } catch (error: any) {
+      // Don't re-throw auth errors to prevent double error handling
+      if (error.response?.status === 401 || error.response?.status === 403) {
+        console.error('Authentication error in getHosts - credentials invalid');
+        return { hosts: [] }; // Return empty result instead of throwing
+      }
       this.handleApiError(error, 'fetching hosts');
     }
   }
@@ -181,6 +196,11 @@ class OnosApiService {
       const response = await this.api.get(url);
       return response.data;
     } catch (error: any) {
+      // Don't re-throw auth errors to prevent double error handling
+      if (error.response?.status === 401 || error.response?.status === 403) {
+        console.error('Authentication error in getFlows - credentials invalid');
+        return { flows: [] }; // Return empty result instead of throwing
+      }
       this.handleApiError(error, 'fetching flows');
     }
   }
@@ -191,6 +211,11 @@ class OnosApiService {
       const response = await this.api.get('/topology');
       return response.data;
     } catch (error: any) {
+      // Don't re-throw auth errors to prevent double error handling
+      if (error.response?.status === 401 || error.response?.status === 403) {
+        console.error('Authentication error in getTopology - credentials invalid');
+        return { topology: {} }; // Return empty result instead of throwing
+      }
       this.handleApiError(error, 'fetching topology');
     }
   }
