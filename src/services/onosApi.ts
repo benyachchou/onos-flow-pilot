@@ -205,6 +205,7 @@ class OnosApiService {
         return { flows: [] }; // Return empty result instead of throwing
       }
       // For non-auth errors, still throw to maintain error handling
+      console.error('Non-auth error in getFlows:', error);
       throw error;
     }
   }
