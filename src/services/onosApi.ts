@@ -3,6 +3,7 @@ import axios, { AxiosInstance } from 'axios';
 class OnosApiService {
   private api: AxiosInstance;
   private baseUrl: string;
+  private authErrorCallbacks: Set<() => void> = new Set();
 
   constructor() {
     // Toujours utiliser le proxy local - jamais d'appel direct
@@ -11,6 +12,22 @@ class OnosApiService {
     
     // Écouter les changements de configuration pour mettre à jour les credentials
     window.addEventListener('onosConfigChanged', this.handleConfigChange.bind(this));
+  }
+
+  // Method to register callbacks for authentication errors
+  public onAuthError(callback: () => void) {
+    this.authErrorCallbacks.add(callback);
+    return () => this.authErrorCallbacks.delete(callback);
+  }
+
+  private notifyAuthError() {
+    this.authErrorCallbacks.forEach(callback => {
+      try {
+        callback();
+      } catch (error) {
+        console.error('Error in auth error callback:', error);
+      }
+    });
   }
 
   private getStoredConfig() {
@@ -77,6 +94,15 @@ class OnosApiService {
       (error) => {
         if (error.response?.status === 401 || error.response?.status === 403) {
           console.error('Authentication failed - credentials may be incorrect');
+          // Notify components about authentication error
+          this.notifyAuthError();
+          // Dispatch a global event for authentication errors
+          window.dispatchEvent(new CustomEvent('onosAuthError', {
+            detail: {
+              status: error.response.status,
+              message: error.response.status === 401 ? 'Unauthorized - invalid credentials' : 'Authentication failed - check credentials in Settings'
+            }
+          }));
         }
         return Promise.reject(error);
       }
@@ -97,6 +123,26 @@ class OnosApiService {
     this.api = this.createApiInstance();
   }
 
+  private handleApiError(error: any, operation: string) {
+    console.error(`Error ${operation}:`, error);
+    
+    if (error.response?.status === 403 || error.response?.status === 401) {
+      const message = error.response.status === 401 
+        ? 'Unauthorized - invalid credentials' 
+        : 'Authentication failed - check credentials in Settings';
+      console.error(message);
+      
+      // Create a more descriptive error for the UI
+      const authError = new Error(message);
+      authError.name = 'AuthenticationError';
+      (authError as any).status = error.response.status;
+      (authError as any).needsAuth = true;
+      throw authError;
+    }
+    
+    throw error;
+  }
+
   // Méthodes API - utilisent toujours le proxy
   async getDevices() {
     try {
@@ -104,11 +150,7 @@ class OnosApiService {
       const response = await this.api.get('/devices');
       return response.data;
     } catch (error: any) {
-      console.error('Error fetching devices:', error);
-      if (error.response?.status === 403 || error.response?.status === 401) {
-        console.error('Authentication failed - check credentials in Settings');
-      }
-      throw error;
+      this.handleApiError(error, 'fetching devices');
     }
   }
 
@@ -118,11 +160,7 @@ class OnosApiService {
       const response = await this.api.get('/links');
       return response.data;
     } catch (error: any) {
-      console.error('Error fetching links:', error);
-      if (error.response?.status === 403 || error.response?.status === 401) {
-        console.error('Authentication failed - check credentials in Settings');
-      }
-      throw error;
+      this.handleApiError(error, 'fetching links');
     }
   }
 
@@ -132,11 +170,7 @@ class OnosApiService {
       const response = await this.api.get('/hosts');
       return response.data;
     } catch (error: any) {
-      console.error('Error fetching hosts:', error);
-      if (error.response?.status === 403 || error.response?.status === 401) {
-        console.error('Authentication failed - check credentials in Settings');
-      }
-      throw error;
+      this.handleApiError(error, 'fetching hosts');
     }
   }
 
@@ -147,11 +181,7 @@ class OnosApiService {
       const response = await this.api.get(url);
       return response.data;
     } catch (error: any) {
-      console.error('Error fetching flows:', error);
-      if (error.response?.status === 403 || error.response?.status === 401) {
-        console.error('Authentication failed - check credentials in Settings');
-      }
-      throw error;
+      this.handleApiError(error, 'fetching flows');
     }
   }
 
@@ -161,11 +191,7 @@ class OnosApiService {
       const response = await this.api.get('/topology');
       return response.data;
     } catch (error: any) {
-      console.error('Error fetching topology:', error);
-      if (error.response?.status === 403 || error.response?.status === 401) {
-        console.error('Authentication failed - check credentials in Settings');
-      }
-      throw error;
+      this.handleApiError(error, 'fetching topology');
     }
   }
 

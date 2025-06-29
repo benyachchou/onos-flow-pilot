@@ -19,6 +19,27 @@ export const useSettingsLogic = () => {
     getLatestOnosConfig 
   } = useSQLite();
 
+  // Listen for authentication errors from API calls
+  useEffect(() => {
+    const handleAuthError = (event: CustomEvent) => {
+      console.log('Authentication error detected:', event.detail);
+      setConnectionStatus('error');
+      
+      toast({
+        title: "Erreur d'authentification",
+        description: "Les identifiants ONOS sont incorrects. Veuillez vérifier vos paramètres de connexion.",
+        variant: "destructive",
+        duration: 5000,
+      });
+    };
+
+    window.addEventListener('onosAuthError', handleAuthError as EventListener);
+    
+    return () => {
+      window.removeEventListener('onosAuthError', handleAuthError as EventListener);
+    };
+  }, [toast]);
+
   // Load configuration once on mount
   useEffect(() => {
     const loadConfig = async () => {
