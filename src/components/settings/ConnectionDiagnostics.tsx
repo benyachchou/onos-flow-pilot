@@ -126,7 +126,7 @@ export const ConnectionDiagnostics: React.FC = () => {
         <div className="mt-4 p-3 bg-blue-50 border border-blue-200 rounded-lg">
           <p className="text-sm text-blue-800">
             <strong>Conseils de dépannage:</strong><br/>
-            • Si "Connexion directe" fonctionne mais pas les autres: problème de proxy<br/>
+            • Si "Connexion directe\" fonctionne mais pas les autres: problème de proxy<br/>
             • Si aucune méthode ne fonctionne: vérifiez IP, port et identifiants<br/>
             • Si erreur 403/401: problème d'authentification (onos/rocks)<br/>
             • Si timeout: problème réseau ou ONOS non démarré
