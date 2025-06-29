@@ -68,6 +68,11 @@ export default defineConfig(({ mode }) => {
             proxy.on('proxyReq', (proxyReq, req, res) => {
               console.log('Proxying request:', req.method, req.url, 'to', options.target + proxyReq.path);
               
+              // Forward the Authorization header - this is crucial for ONOS authentication
+              if (req.headers.authorization) {
+                proxyReq.setHeader('Authorization', req.headers.authorization);
+              }
+              
               // Set proper headers for ONOS
               proxyReq.setHeader('Accept', 'application/json');
               proxyReq.setHeader('Content-Type', 'application/json');
