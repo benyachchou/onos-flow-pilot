@@ -1,4 +1,3 @@
-
 import { useState, useEffect, useCallback } from 'react';
 import { useToast } from '@/hooks/use-toast';
 import { onosApi } from '@/services/onosApi';
@@ -52,7 +51,7 @@ export const useSettingsLogic = () => {
     };
 
     loadConfig();
-  }, []);
+  }, [isInitialized, getLatestOnosConfig]);
 
   // Simplified save function
   const handleSaveConfig = useCallback(async () => {
@@ -73,8 +72,14 @@ export const useSettingsLogic = () => {
         baseUrl: '/onos/v1'
       };
       localStorage.setItem('onosConfig', JSON.stringify(configToSave));
+      
+      // Dispatch the event and also manually update the API credentials
       window.dispatchEvent(new CustomEvent('onosConfigChanged'));
+      onosApi.updateCredentials();
+      
       setConnectionStatus('unknown');
+      
+      console.log('Configuration saved successfully:', configToSave);
     } catch (error) {
       console.error('Error saving config:', error);
     }
@@ -85,7 +90,11 @@ export const useSettingsLogic = () => {
     setConnectionStatus('unknown');
     
     try {
+      // Save configuration first to ensure latest credentials are used
+      await handleSaveConfig();
+      
       console.log('Testing connection to:', `http://${controllerIp}:${controllerPort}/onos/v1/devices`);
+      console.log('Using credentials:', { username, hasPassword: !!password });
       
       const result = await onosApi.testConnection();
       
@@ -97,9 +106,18 @@ export const useSettingsLogic = () => {
         });
       } else {
         setConnectionStatus('error');
+        
+        // Provide more specific error messages for authentication issues
+        let errorMessage = result.error || "Impossible de se connecter au contrôleur";
+        if (result.error?.includes('Authentication failed') || result.error?.includes('403')) {
+          errorMessage = "Erreur d'authentification - vérifiez le nom d'utilisateur et le mot de passe";
+        } else if (result.error?.includes('Unauthorized') || result.error?.includes('401')) {
+          errorMessage = "Accès non autorisé - identifiants invalides";
+        }
+        
         toast({
           title: "Erreur de connexion",
-          description: result.error || "Impossible de se connecter au contrôleur",
+          description: errorMessage,
           variant: "destructive",
         });
       }
@@ -108,7 +126,7 @@ export const useSettingsLogic = () => {
       setConnectionStatus('error');
       toast({
         title: "Erreur de connexion",
-        description: "Vérifiez l'adresse IP et le port du contrôleur",
+        description: "Vérifiez l'adresse IP, le port et les identifiants du contrôleur",
         variant: "destructive",
       });
     } finally {

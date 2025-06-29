@@ -1,4 +1,3 @@
-
 import axios, { AxiosInstance } from 'axios';
 
 class OnosApiService {
@@ -17,15 +16,19 @@ class OnosApiService {
   private getStoredConfig() {
     const stored = localStorage.getItem('onosConfig');
     if (stored) {
-      const config = JSON.parse(stored);
-      return {
-        ip: config.ip || '192.168.94.129',
-        port: config.port || '8181',
-        username: config.username || 'onos',
-        password: config.password || 'rocks',
-        // Toujours utiliser le proxy local pour les appels API
-        baseUrl: '/onos/v1'
-      };
+      try {
+        const config = JSON.parse(stored);
+        return {
+          ip: config.ip || '192.168.94.129',
+          port: config.port || '8181',
+          username: config.username || 'onos',
+          password: config.password || 'rocks',
+          // Toujours utiliser le proxy local pour les appels API
+          baseUrl: '/onos/v1'
+        };
+      } catch (error) {
+        console.error('Error parsing stored config:', error);
+      }
     }
     return {
       ip: '192.168.94.129',
@@ -38,6 +41,13 @@ class OnosApiService {
 
   private createApiInstance(): AxiosInstance {
     const config = this.getStoredConfig();
+    console.log('Creating API instance with config:', { 
+      baseURL: this.baseUrl, 
+      username: config.username,
+      // Don't log password for security
+      hasPassword: !!config.password 
+    });
+    
     return axios.create({
       baseURL: this.baseUrl, // Toujours le proxy local
       timeout: 10000,
@@ -58,59 +68,115 @@ class OnosApiService {
     this.api = this.createApiInstance();
   }
 
+  // Method to manually update credentials - useful for immediate updates
+  public updateCredentials() {
+    console.log('Manually updating API credentials...');
+    this.api = this.createApiInstance();
+  }
+
   // Méthodes API - utilisent toujours le proxy
   async getDevices() {
     try {
+      // Ensure we have the latest credentials before making the request
+      const config = this.getStoredConfig();
+      this.api.defaults.auth = {
+        username: config.username,
+        password: config.password
+      };
+      
       console.log('Fetching devices via proxy:', this.baseUrl + '/devices');
       const response = await this.api.get('/devices');
       return response.data;
-    } catch (error) {
+    } catch (error: any) {
       console.error('Error fetching devices:', error);
+      if (error.response?.status === 403) {
+        console.error('Authentication failed - check credentials in Settings');
+      }
       throw error;
     }
   }
 
   async getLinks() {
     try {
+      // Ensure we have the latest credentials before making the request
+      const config = this.getStoredConfig();
+      this.api.defaults.auth = {
+        username: config.username,
+        password: config.password
+      };
+      
       console.log('Fetching links via proxy:', this.baseUrl + '/links');
       const response = await this.api.get('/links');
       return response.data;
-    } catch (error) {
+    } catch (error: any) {
       console.error('Error fetching links:', error);
+      if (error.response?.status === 403) {
+        console.error('Authentication failed - check credentials in Settings');
+      }
       throw error;
     }
   }
 
   async getHosts() {
     try {
+      // Ensure we have the latest credentials before making the request
+      const config = this.getStoredConfig();
+      this.api.defaults.auth = {
+        username: config.username,
+        password: config.password
+      };
+      
       console.log('Fetching hosts via proxy:', this.baseUrl + '/hosts');
       const response = await this.api.get('/hosts');
       return response.data;
-    } catch (error) {
+    } catch (error: any) {
       console.error('Error fetching hosts:', error);
+      if (error.response?.status === 403) {
+        console.error('Authentication failed - check credentials in Settings');
+      }
       throw error;
     }
   }
 
   async getFlows(deviceId?: string) {
     try {
+      // Ensure we have the latest credentials before making the request
+      const config = this.getStoredConfig();
+      this.api.defaults.auth = {
+        username: config.username,
+        password: config.password
+      };
+      
       const url = deviceId ? `/flows/${deviceId}` : '/flows';
       console.log('Fetching flows via proxy:', this.baseUrl + url);
       const response = await this.api.get(url);
       return response.data;
-    } catch (error) {
+    } catch (error: any) {
       console.error('Error fetching flows:', error);
+      if (error.response?.status === 403) {
+        console.error('Authentication failed - check credentials in Settings');
+      }
       throw error;
     }
   }
 
   async getTopology() {
     try {
+      // Ensure we have the latest credentials before making the request
+      const config = this.getStoredConfig();
+      this.api.defaults.auth = {
+        username: config.username,
+        password: config.password
+      };
+      
       console.log('Fetching topology via proxy:', this.baseUrl + '/topology');
       const response = await this.api.get('/topology');
       return response.data;
-    } catch (error) {
+    } catch (error: any) {
       console.error('Error fetching topology:', error);
+      if (error.response?.status === 403) {
+        console.error('Authentication failed - check credentials in Settings');
+      }
       throw error;
     }
   }
@@ -118,20 +184,48 @@ class OnosApiService {
   // Test de connexion - teste aussi via le proxy maintenant
   async testConnection() {
     try {
+      // Ensure we have the latest credentials before making the request
+      const config = this.getStoredConfig();
+      this.api.defaults.auth = {
+        username: config.username,
+        password: config.password
+      };
+      
       console.log('Testing connection via proxy:', this.baseUrl + '/devices');
       const response = await this.api.get('/devices');
       return { success: true, data: response.data };
     } catch (error: any) {
       console.error('Connection test via proxy failed:', error);
+      let errorMessage = 'Connection failed';
+      
+      if (error.response?.status === 403) {
+        errorMessage = 'Authentication failed - check username and password';
+      } else if (error.response?.status === 401) {
+        errorMessage = 'Unauthorized - invalid credentials';
+      } else if (error.response) {
+        errorMessage = `HTTP ${error.response.status}: ${error.response.statusText}`;
+      } else if (error.request) {
+        errorMessage = 'No response from server - check network connection';
+      } else {
+        errorMessage = error.message;
+      }
+      
       return { 
         success: false, 
-        error: error.message || 'Connection failed' 
+        error: errorMessage
       };
     }
   }
 
   async executeRequest(method: string, endpoint: string, data?: any) {
     try {
+      // Ensure we have the latest credentials before making the request
+      const config = this.getStoredConfig();
+      this.api.defaults.auth = {
+        username: config.username,
+        password: config.password
+      };
+      
       console.log('Executing request:', { method, endpoint, data });
       
       // Préparer les données pour la requête
@@ -180,10 +274,16 @@ class OnosApiService {
       // Améliorer le message d'erreur
       let errorMessage = 'Request failed';
       if (error.response) {
-        errorMessage = error.response?.data?.message || 
-                      error.response?.data?.error || 
-                      error.response?.statusText || 
-                      `HTTP ${error.response.status}`;
+        if (error.response.status === 403) {
+          errorMessage = 'Authentication failed - check credentials in Settings';
+        } else if (error.response.status === 401) {
+          errorMessage = 'Unauthorized - invalid credentials';
+        } else {
+          errorMessage = error.response?.data?.message || 
+                        error.response?.data?.error || 
+                        error.response?.statusText || 
+                        `HTTP ${error.response.status}`;
+        }
       } else if (error.request) {
         errorMessage = 'Aucune réponse du serveur';
       } else {
