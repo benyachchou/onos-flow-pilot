@@ -30,8 +30,8 @@ export default defineConfig(({ mode }) => {
               // Ensure proper headers for ONOS
               proxyReq.setHeader('Accept', 'application/json');
               proxyReq.setHeader('Content-Type', 'application/json');
-              // Set Origin header to match what ONOS controller expects
-              proxyReq.setHeader('Origin', 'https://stackblitz.com');
+              // Remove the hardcoded Origin header - let the browser send the actual origin
+              // proxyReq.setHeader('Origin', 'https://stackblitz.com');
             });
             proxy.on('proxyRes', (proxyRes, req, res) => {
               console.log('Proxy response:', proxyRes.statusCode, req.url);
