@@ -48,7 +48,7 @@ class OnosApiService {
       hasPassword: !!config.password 
     });
     
-    return axios.create({
+    const instance = axios.create({
       baseURL: this.baseUrl, // Toujours le proxy local
       timeout: 10000,
       headers: {
@@ -60,6 +60,29 @@ class OnosApiService {
         password: config.password
       }
     });
+
+    // Add request interceptor to ensure auth is always up to date
+    instance.interceptors.request.use((config) => {
+      const currentConfig = this.getStoredConfig();
+      config.auth = {
+        username: currentConfig.username,
+        password: currentConfig.password
+      };
+      return config;
+    });
+
+    // Add response interceptor to handle auth errors
+    instance.interceptors.response.use(
+      (response) => response,
+      (error) => {
+        if (error.response?.status === 401 || error.response?.status === 403) {
+          console.error('Authentication failed - credentials may be incorrect');
+        }
+        return Promise.reject(error);
+      }
+    );
+
+    return instance;
   }
 
   private handleConfigChange() {
@@ -77,19 +100,12 @@ class OnosApiService {
   // Méthodes API - utilisent toujours le proxy
   async getDevices() {
     try {
-      // Ensure we have the latest credentials before making the request
-      const config = this.getStoredConfig();
-      this.api.defaults.auth = {
-        username: config.username,
-        password: config.password
-      };
-      
       console.log('Fetching devices via proxy:', this.baseUrl + '/devices');
       const response = await this.api.get('/devices');
       return response.data;
     } catch (error: any) {
       console.error('Error fetching devices:', error);
-      if (error.response?.status === 403) {
+      if (error.response?.status === 403 || error.response?.status === 401) {
         console.error('Authentication failed - check credentials in Settings');
       }
       throw error;
@@ -98,19 +114,12 @@ class OnosApiService {
 
   async getLinks() {
     try {
-      // Ensure we have the latest credentials before making the request
-      const config = this.getStoredConfig();
-      this.api.defaults.auth = {
-        username: config.username,
-        password: config.password
-      };
-      
       console.log('Fetching links via proxy:', this.baseUrl + '/links');
       const response = await this.api.get('/links');
       return response.data;
     } catch (error: any) {
       console.error('Error fetching links:', error);
-      if (error.response?.status === 403) {
+      if (error.response?.status === 403 || error.response?.status === 401) {
         console.error('Authentication failed - check credentials in Settings');
       }
       throw error;
@@ -119,19 +128,12 @@ class OnosApiService {
 
   async getHosts() {
     try {
-      // Ensure we have the latest credentials before making the request
-      const config = this.getStoredConfig();
-      this.api.defaults.auth = {
-        username: config.username,
-        password: config.password
-      };
-      
       console.log('Fetching hosts via proxy:', this.baseUrl + '/hosts');
       const response = await this.api.get('/hosts');
       return response.data;
     } catch (error: any) {
       console.error('Error fetching hosts:', error);
-      if (error.response?.status === 403) {
+      if (error.response?.status === 403 || error.response?.status === 401) {
         console.error('Authentication failed - check credentials in Settings');
       }
       throw error;
@@ -140,20 +142,13 @@ class OnosApiService {
 
   async getFlows(deviceId?: string) {
     try {
-      // Ensure we have the latest credentials before making the request
-      const config = this.getStoredConfig();
-      this.api.defaults.auth = {
-        username: config.username,
-        password: config.password
-      };
-      
       const url = deviceId ? `/flows/${deviceId}` : '/flows';
       console.log('Fetching flows via proxy:', this.baseUrl + url);
       const response = await this.api.get(url);
       return response.data;
     } catch (error: any) {
       console.error('Error fetching flows:', error);
-      if (error.response?.status === 403) {
+      if (error.response?.status === 403 || error.response?.status === 401) {
         console.error('Authentication failed - check credentials in Settings');
       }
       throw error;
@@ -162,19 +157,12 @@ class OnosApiService {
 
   async getTopology() {
     try {
-      // Ensure we have the latest credentials before making the request
-      const config = this.getStoredConfig();
-      this.api.defaults.auth = {
-        username: config.username,
-        password: config.password
-      };
-      
       console.log('Fetching topology via proxy:', this.baseUrl + '/topology');
       const response = await this.api.get('/topology');
       return response.data;
     } catch (error: any) {
       console.error('Error fetching topology:', error);
-      if (error.response?.status === 403) {
+      if (error.response?.status === 403 || error.response?.status === 401) {
         console.error('Authentication failed - check credentials in Settings');
       }
       throw error;
@@ -184,13 +172,6 @@ class OnosApiService {
   // Test de connexion - teste aussi via le proxy maintenant
   async testConnection() {
     try {
-      // Ensure we have the latest credentials before making the request
-      const config = this.getStoredConfig();
-      this.api.defaults.auth = {
-        username: config.username,
-        password: config.password
-      };
-      
       console.log('Testing connection via proxy:', this.baseUrl + '/devices');
       const response = await this.api.get('/devices');
       return { success: true, data: response.data };
@@ -219,13 +200,6 @@ class OnosApiService {
 
   async executeRequest(method: string, endpoint: string, data?: any) {
     try {
-      // Ensure we have the latest credentials before making the request
-      const config = this.getStoredConfig();
-      this.api.defaults.auth = {
-        username: config.username,
-        password: config.password
-      };
-      
       console.log('Executing request:', { method, endpoint, data });
       
       // Préparer les données pour la requête
