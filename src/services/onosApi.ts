@@ -123,26 +123,6 @@ class OnosApiService {
     this.api = this.createApiInstance();
   }
 
-  private handleApiError(error: any, operation: string) {
-    console.error(`Error ${operation}:`, error);
-    
-    if (error.response?.status === 403 || error.response?.status === 401) {
-      const message = error.response.status === 401 
-        ? 'Unauthorized - invalid credentials' 
-        : 'Authentication failed - check credentials in Settings';
-      console.error(message);
-      
-      // Create a more descriptive error for the UI
-      const authError = new Error(message);
-      authError.name = 'AuthenticationError';
-      (authError as any).status = error.response.status;
-      (authError as any).needsAuth = true;
-      throw authError;
-    }
-    
-    throw error;
-  }
-
   // Helper method to handle authentication errors consistently
   private handleAuthError(error: any, operation: string) {
     if (error.response?.status === 401 || error.response?.status === 403) {
